@@ -1,0 +1,198 @@
+# Escrow OS
+
+**An Ubuntu-based OS where every AI agent runs as a reversible transaction.**
+
+AI coding agents (Claude Code, Codex, Gemini CLI, aider, ...) run shell commands
+with your full permissions: one bad step can delete files, rewrite `~/.bashrc`
+or leak secrets. On Escrow OS, every agent process runs on a **copy-on-write
+layer**. Nothing it writes reaches your real files until you **review the diff**
+and **commit**. **Discard** throws it all away.
+
+```
+$ claude                     # the shim starts it inside an escrow session automatically
+...agent works...
+escrow: session 3 finished (exit 0): 1 added, 2 modified, 2 deleted, 0 replaced
+$ escrow review 3            # diff + network activity, then [c]ommit / [d]iscard
+```
+
+Escrow OS = Ubuntu 26.04 + the `escrow` tool (this repo) + agent shims that
+make escrow the default for every known agent CLI + our branding.
+
+## Install
+
+On Ubuntu 24.04 or newer (Python ≥ 3.12, systemd):
+
+```sh
+bash packaging/build-debs.sh                      # builds build/escrow_*.deb, build/escrow-shims_*.deb
+sudo apt install ./build/escrow_*_all.deb ./build/escrow-shims_*_all.deb
+```
+
+Log out and back in (or `. /etc/profile.d/escrow.sh`) so the agent shims come
+first on `PATH`.
+
+**Without installing** (development): `./dev-escrow <command>` runs the in-tree
+copy and keeps sessions in `/run/user/$UID/escrow-dev`.
+
+## Usage
+
+| Command | What it does |
+|---|---|
+| `escrow run [--profile coding\|strict\|offline] [--memory 4G] [--cpu 200%] [--tasks 512] [--no-shield] -- CMD...` | Run CMD (default: `$SHELL`) in a new session |
+| `escrow ls [-q]` | List sessions and their status (running, pending, committed, discarded, no-changes; `!` = tainted) |
+| `escrow diff [ID] [PATHS] [--stat]` | Show staged changes as a unified diff (`A` added, `M` modified, `D` deleted, `R` replaced dir); risky changes are flagged |
+| `escrow log [ID] [--all]` | Session details, limits, events (Landlock, tripwire) and every network connection the agent made |
+| `escrow review [ID] [--explain]` | Taint warning + diff summary + network activity (marked irreversible), then commit / discard / view / quit |
+| `escrow explain [ID]` | Plain-English summary, risk level and concerns from a **local** LLM (advisory only) |
+| `escrow commit [ID] [PATHS] [--force] [--markers] [--accept-risk] [--yes]` | Apply all staged changes, or only those under PATHS (partial commit). Files changed on disk meanwhile are 3-way merged |
+| `escrow discard [ID] [--yes]` | Throw away every staged change |
+| `escrow freeze` / `thaw` / `kill [ID]` | Pause, resume or kill every process of a running session (`cgroup.freeze`, `cgroup.kill`) |
+| `escrow ledger [--session N] [-n N] [--full]`, `escrow verify` | Show the hash-chained audit ledger; check that its chain is intact |
+| `escrow top [-i SECONDS] [--once]` | Live view of running sessions: CPU%, memory, tasks, pressure (PSI), staged size, network |
+
+`ID` defaults to the latest session. Profiles: **coding** = network allowed and
+logged; **strict** = like coding, but Landlock hides the rest of your home
+folder (only the project, agent state dirs and temp dirs are reachable);
+**offline** = private network namespace with loopback only.
+
+Agents registered in `/etc/escrow/agents.d/<name>.toml` (claude, codex, gemini,
+copilot, goose, aider) start inside escrow automatically. Set `enabled = false`
+or change `profile`/limits there.
+
+## Demo
+
+```sh
+demo/run-demo.sh          # PAUSE=1 demo/run-demo.sh waits between steps (for a live demo)
+```
+
+A "rogue agent" deletes a notes file, runs `rm -rf ~/escrow-demo/photos`,
+breaks the project code, appends a `curl | sh` line to `~/.bashrc`, opens
+network connections, tries ptrace, mount, sudo, writing to `/mnt/c` and `/var`,
+and a fork bomb, and finally goes for `~/.ssh/id_rsa`. The tripwire freezes it
+there. The demo then shows:
+
+- the folder's SHA-256 fingerprint is unchanged;
+- the diff, with the `.bashrc` change flagged as risky;
+- the log, with the tripwire event and every connection;
+- the policy gate refusing to commit;
+- the discard.
+
+Then it runs a second agent and commits just one of its files. Next, two
+agents edit the same README "at the same time", and the second commit is
+3-way merged. Finally it prints and verifies the ledger.
+
+## How it works (and the OS concepts behind each part)
+
+```
+escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota, TasksMax)
+                └─ strace -f --seccomp-bpf -e trace=connect   (network log, outside the sandbox)
+                    └─ escrow-enter  P0: unshare(USER|NS|PID[|NET]), uid/gid map,
+                        │               overlayfs on /home /etc /opt /srv (/usr),
+                        │               secret shield: decoys over ~/.ssh ~/.aws ...,
+                        │               read-only binds on everything else (incl. cgroupfs),
+                        │               private tmpfs on /tmp /var/tmp /dev/shm /run/user/UID
+                        └─ P1  PID 1 of the new PID namespace: fresh /proc, reaps children,
+                            │   inotify tripwire on the decoys (SIGSTOP all, then kill/resume)
+                            └─ P2  agent: Landlock + no_new_privs + seccomp filter, then exec
+```
+
+| Part | OS concept | Where |
+|---|---|---|
+| Copy-on-write staging | File systems: overlayfs upper/lower layers, whiteouts (char dev 0/0) for deletions, opaque dirs for replaced dirs | `core/escrow/sandbox.py` `stage_overlays`, `core/escrow/changes.py` |
+| Private view of the system | Namespaces: user (unprivileged, identity uid map), mount, PID (agent sees ~5 processes), network (offline profile) | `sandbox.py` `enter` |
+| Unprivileged mounting | Capabilities: a new user namespace grants caps *only inside it*; the agent exec's as a normal uid with none | `sandbox.py` |
+| Nothing else writable | Mount propagation (`MS_PRIVATE`), read-only bind remounts, locked mount flags in user namespaces | `sandbox.py` `lock_down_rest` |
+| Syscall filter | seccomp-BPF, written by hand: arch check, deny ptrace, process_vm_*, module load, kexec, bpf, perf, all mount APIs, reboot, swap, open_by_handle_at, io_uring, raw/packet sockets | `core/escrow/seccomp.py` |
+| No privilege escalation | `PR_SET_NO_NEW_PRIVS`: setuid binaries (sudo) cannot gain root | `seccomp.py` |
+| Resource limits | cgroup v2 via a systemd scope: memory, CPU quota, max tasks (stops fork bombs) | `core/escrow/cli.py` `cmd_run` |
+| Process lifecycle | PID 1 reaping; when the agent exits, the kernel kills everything left in its PID namespace | `sandbox.py` `init_process` |
+| Commit | Optimistic concurrency control: a file that changed on disk since the session started is a conflict, and the first committer wins. Atomic `rename()` means readers never see half a file | `changes.py` `apply` |
+| 3-way merge | On a conflict, `git merge-file` merges (disk now, base, agent copy). The base is snapshotted when the agent exits. Non-overlapping edits merge cleanly; overlapping ones are refused, or written with conflict markers (`--markers`) | `changes.py` `three_way` |
+| Built-in AI | `escrow explain` sends the diff to a local OpenAI-compatible server (llama.cpp `llama-server` or Ollama) with a JSON schema. The diff is wrapped as untrusted input (prompt injection), and the deterministic findings are listed separately | `core/escrow/explain.py` |
+| Monitoring | `escrow top` reads each session's cgroup files (`cpu.stat`, `memory.current`, `pids.current`, `cpu.pressure`, `memory.pressure`), plus the upper-layer size and the network log | `core/escrow/top.py` |
+| Network audit | ptrace via strace, seccomp pre-filter so only `connect()` stops the tracer | `cli.py`, `core/escrow/netlog.py` |
+| Secret shield + tripwire | tmpfs/bind mounts put decoy keys over `~/.ssh`, `~/.aws`, `~/.gnupg`, ...; PID 1 watches them with inotify. On access it SIGSTOPs every agent process (`kill(-1)` from PID 1), then kills them, or resumes if the user says so; the session is marked tainted | `core/escrow/shield.py`, `sandbox.py` `init_process` |
+| Landlock | Unprivileged LSM: ABI-6 scoping blocks abstract unix sockets and signals outside the sandbox (all profiles); `strict` adds a filesystem allowlist | `core/escrow/landlock.py` |
+| Limits can't be lifted | The scope's cgroup files are owned by the user's uid, so `/sys/fs/cgroup` is remounted read-only inside the session (otherwise the agent could raise its own `pids.max`) | `sandbox.py` `lock_down_rest` |
+| Policy gate | Commit refuses changes to shell startup files, `.git/hooks`, `.git/config`, `~/.ssh`, autostart and systemd user units, `~/.local/bin`, credentials, `/etc` and setuid bits, and warns on mass deletion; `--accept-risk` overrides and is logged | `core/escrow/policy.py` |
+| Audit ledger | Append-only and hash-chained (each record holds the previous record's SHA-256), with `flock` for concurrent writers; `escrow verify` finds the first broken link. Tamper-evident, not tamper-proof | `core/escrow/ledger.py` |
+| Default for every agent | PATH shims + registry in `/etc/escrow/agents.d`; `ESCROW_SESSION` prevents nesting | `core/escrow/shim.py` |
+| Distro integration | Debian packages, maintainer scripts, AppArmor profile allowing user namespaces for `escrow-enter` only (Ubuntu ≥ 23.10 restricts them) | `packaging/`, `core/etc/apparmor.d/escrow` |
+
+## Tests
+
+```sh
+python3 -m unittest -v tests/test_escrow.py
+```
+
+35 end-to-end tests run real sessions against real files. They cover staging,
+commit, partial commit, replaced dirs, symlinks, mode changes, conflicts,
+discard, read-only system dirs and cgroup files, hidden session data, the PID
+namespace, cgroup limits, the fork bomb, seccomp, sudo, the offline profile,
+nesting, the network log, decoys and the tripwire, the policy gate, mass-delete
+warnings, ledger tamper detection, the strict profile, abstract-socket scoping,
+`escrow kill`, clean and conflicting 3-way merges, `explain` (against a stub
+model server) and `escrow top`. All pass on Ubuntu 26.04 under WSL2 (kernel 6.18, Landlock
+ABI 7).
+
+## Limits (honest list)
+
+- **Discard cannot undo network effects.** Uploads, `git push` and API calls
+  have already happened; `escrow review` lists them as irreversible. The log
+  records `connect()` calls, not payloads.
+- **The agent has your permissions, not root's.** Writes to root-owned paths
+  fail as they would for you; staging system changes would need subordinate uid
+  maps (future work).
+- **In the `coding` profile the agent can still read your non-secret files**
+  (e.g. `~/Documents`). Credentials are replaced by decoys; use `--profile
+  strict` to hide the rest of `$HOME`.
+- **The shield also hides keys the agent might legitimately need** (e.g.
+  `git push` over SSH). Push yourself after committing, or use `--no-shield`.
+- The tripwire knows *which decoy* was opened, not which process opened it
+  (inotify reports no PID; fanotify would, but needs root).
+- The 3-way merge needs a base. It is snapshotted when the agent exits, so
+  if a file also changed on disk *while the agent was still running*, there is
+  no base and the commit falls back to a plain conflict.
+- `escrow explain` is advisory. The diff is agent-written and may contain
+  prompt injection. Commit decisions rest on the policy gate, the tripwire and
+  the conflict check, never on the model. No model ships with the package;
+  run `llama-server` or Ollama yourself (see `/etc/escrow/escrow.toml`).
+- The ledger is tamper-evident, not tamper-proof: whoever can rewrite the whole
+  file can rebuild the chain. Keep the head hash (`escrow verify`) somewhere else.
+- Supplementary groups are dropped inside the session (e.g. no `docker` group).
+- Tools that need nested sandboxes (bubblewrap, Chrome's sandbox) fail because
+  mount syscalls are denied.
+- A directory with other filesystems mounted inside it can't be staged by an
+  unprivileged overlay (the kernel refuses to clone mounts with locked
+  children). It is made read-only instead. This is `/usr` on WSL2.
+- Changing files that a running session also uses as its lower layer is
+  "undefined" per the overlayfs docs. Escrow's commit-time conflict check
+  catches the common case.
+- The shims work for login shells. An agent installed in `~/.local/bin` can
+  come before them on `PATH`, because Ubuntu's `~/.profile` prepends that
+  directory.
+- The AppArmor profile is untested so far: WSL2 has no AppArmor. It needs
+  checking on a real Ubuntu install.
+
+## Prior art
+
+The commit-or-discard core follows [binpash/try](https://github.com/binpash/try),
+which also overlays top-level directories inside an unprivileged user
+namespace. Related work: airbag, GVM, Alibaba Cloud Linux 4 Agentic Edition,
+Sandlock, osModa. To our knowledge, no distribution makes stage-then-commit the
+default for every agent process, combined with seccomp, cgroup v2 limits and a
+per-connection network audit, reviewed on one screen.
+
+## Repository layout
+
+```
+core/escrow/      Python package: cli, session, sandbox, seccomp, landlock, shield,
+                  changes, policy, ledger, netlog, explain, top, shim
+core/bin/escrow   entry point            core/libexec/  escrow-enter, escrow-shim
+core/etc/         agents.d registry, profile.d PATH hook, AppArmor profile, escrow.toml
+packaging/        Debian control files + build-debs.sh
+demo/             rogue-agent.sh, run-demo.sh
+tests/            end-to-end tests
+```
+
+Escrow OS is based on Ubuntu and is not affiliated with or endorsed by
+Canonical. Licence: MIT.

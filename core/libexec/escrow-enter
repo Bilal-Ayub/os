@@ -1,0 +1,16 @@
+#!/usr/bin/python3 -I
+# Internal helper of `escrow run`: builds the sandbox and starts the agent.
+# It is a separate executable so an AppArmor profile can grant it (and only it)
+# permission to create user namespaces on Ubuntu 23.10+.
+import os
+import sys
+
+_here = os.path.dirname(os.path.realpath(__file__))
+for _cand in (_here, os.path.join(_here, "..")):
+    if os.path.isfile(os.path.join(_cand, "escrow", "sandbox.py")):
+        sys.path.insert(0, os.path.abspath(_cand))
+        break
+
+from escrow.sandbox import main  # noqa: E402
+
+sys.exit(main(sys.argv))

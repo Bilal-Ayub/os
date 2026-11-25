@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    # Shared, sticky state dir; each user gets a private 0700 subdir on first use.
+    install -d -m 1777 /var/lib/escrow
+    if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+        apparmor_parser -r -T -W /etc/apparmor.d/escrow \
+            || echo "escrow: warning: could not load the AppArmor profile" >&2
+    fi
+fi
+exit 0

@@ -1,0 +1,15 @@
+#!/usr/bin/python3 -I
+# Agent shim: `claude`, `codex`, ... resolve to this file and are re-run
+# through `escrow run` with the agent's profile from /etc/escrow/agents.d/.
+import os
+import sys
+
+_here = os.path.dirname(os.path.realpath(__file__))
+for _cand in (_here, os.path.join(_here, "..")):
+    if os.path.isfile(os.path.join(_cand, "escrow", "shim.py")):
+        sys.path.insert(0, os.path.abspath(_cand))
+        break
+
+from escrow.shim import main  # noqa: E402
+
+sys.exit(main(sys.argv))

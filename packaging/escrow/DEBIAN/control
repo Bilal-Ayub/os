@@ -1,0 +1,13 @@
+Package: escrow
+Version: @VERSION@
+Architecture: all
+Maintainer: Escrow OS Team <team@escrow-os.invalid>
+Depends: python3 (>= 3.12), systemd, util-linux, strace
+Recommends: apparmor, git, llama.cpp
+Section: admin
+Priority: optional
+Description: run AI agents as reversible transactions
+ escrow runs an AI agent (or any command) on a copy-on-write overlay inside
+ unprivileged user, mount and PID namespaces, with a seccomp filter, cgroup v2
+ limits and a log of its network connections. Nothing it writes reaches your
+ files until you review the diff and commit; discard throws it all away.

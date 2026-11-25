@@ -1,0 +1,7 @@
+/etc/escrow/agents.d/aider.toml
+/etc/escrow/agents.d/claude.toml
+/etc/escrow/agents.d/codex.toml
+/etc/escrow/agents.d/copilot.toml
+/etc/escrow/agents.d/gemini.toml
+/etc/escrow/agents.d/goose.toml
+/etc/profile.d/escrow.sh

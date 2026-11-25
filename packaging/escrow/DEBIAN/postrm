@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+if [ "$1" = "purge" ]; then
+    # Pending (uncommitted) sessions are lost on purge.
+    rm -rf /var/lib/escrow
+fi
+exit 0

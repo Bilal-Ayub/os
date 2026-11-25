@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the in-tree escrow without installing it (development only).
+export ESCROW_STATE_DIR="${ESCROW_STATE_DIR:-/run/user/$(id -u)/escrow-dev}"
+exec python3 -I "$(dirname "$(readlink -f "$0")")/core/bin/escrow" "$@"

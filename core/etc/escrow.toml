@@ -1,0 +1,9 @@
+# Escrow OS system configuration.
+
+[llm]
+# Local model used by `escrow explain` and `escrow review --explain`.
+# Any OpenAI-compatible server works: llama.cpp's llama-server (default port
+# 8080) or Ollama (port 11434). The diff never leaves this machine.
+# Environment variables ESCROW_LLM_URL / ESCROW_LLM_MODEL override these.
+# url = "http://127.0.0.1:8080/v1"
+# model = "qwen3.5-2b"

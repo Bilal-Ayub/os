@@ -1,0 +1,14 @@
+#!/usr/bin/python3 -I
+# escrow: run AI agents as reversible transactions (see `escrow --help`).
+import os
+import sys
+
+_here = os.path.dirname(os.path.realpath(__file__))
+for _cand in (os.path.join(_here, "..", "lib", "escrow"), os.path.join(_here, "..")):
+    if os.path.isfile(os.path.join(_cand, "escrow", "cli.py")):
+        sys.path.insert(0, os.path.abspath(_cand))
+        break
+
+from escrow.cli import main  # noqa: E402
+
+sys.exit(main())

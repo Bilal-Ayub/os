@@ -1,0 +1,7 @@
+# Escrow agent registry entry for `goose`.
+# Every `goose` started from a login shell runs inside `escrow run` with these settings.
+enabled = true
+profile = "coding"      # coding = network allowed and logged; offline = no network
+# memory = "4G"         # cgroup MemoryMax
+# cpu = "200%"          # cgroup CPUQuota
+# tasks = 512           # cgroup TasksMax
