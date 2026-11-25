@@ -88,8 +88,20 @@ mkdir -p "$ROOT/tmp/escrow-debs"
 cp "${DEBS[@]}" "$ROOT/tmp/escrow-debs/"
 EXTRA="git apparmor"
 [ "$MODEL" != none ] && EXTRA="$EXTRA llama.cpp-tools"
+# The image's own sources include file:/cdrom (valid only when booted from the
+# disc), so the build uses a temporary, signed archive list and leaves those alone.
+CODENAME="$(. "$ROOT/etc/os-release"; echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+KEY=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+[ -f "$ROOT$KEY" ] || die "no $KEY in the image"
+{
+    for suite in "$CODENAME" "$CODENAME-updates" "$CODENAME-security"; do
+        echo "deb [signed-by=$KEY] http://archive.ubuntu.com/ubuntu $suite main universe"
+    done
+} > "$ROOT/tmp/escrow-build.list"
+APTOPT="-o Dir::Etc::SourceList=/tmp/escrow-build.list -o Dir::Etc::SourceParts=/nonexistent"
 chroot "$ROOT" /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive HOME=/root \
-    sh -c "apt-get update -qq && apt-get install -y -q --no-install-recommends /tmp/escrow-debs/*.deb $EXTRA"
+    sh -c "apt-get $APTOPT update -qq && apt-get $APTOPT install -y -q --no-install-recommends /tmp/escrow-debs/*.deb $EXTRA"
+rm -f "$ROOT/tmp/escrow-build.list"
 
 if [ "$MODEL" != none ]; then
     install -D -m 0644 "$MODEL" "$ROOT/usr/share/escrow/models/$(basename "$MODEL")"
