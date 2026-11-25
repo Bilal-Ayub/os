@@ -135,6 +135,9 @@ escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota,
 python3 -m unittest -v tests/test_escrow.py
 ```
 
+Clone the repo under your home folder: `/tmp` is private inside a session, so
+from a clone in `/tmp` the nesting test can't reach the repo and skips itself.
+
 36 end-to-end tests run real sessions against real files. They cover staging,
 commit, partial commit, replaced dirs, symlinks, mode changes, conflicts,
 discard, read-only system dirs and cgroup files, hidden session data, the PID

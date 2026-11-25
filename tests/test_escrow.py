@@ -236,6 +236,8 @@ class EscrowTest(unittest.TestCase):
         self.assertIn("offline", p.stdout)
 
     def test_nesting_is_refused(self):
+        if REPO.startswith(("/tmp/", "/var/tmp/", "/dev/shm/")):
+            self.skipTest("the repo is in a temp dir, which is private inside a session; clone under $HOME to run this")
         p = sh(" ".join(ESCROW) + " run -- true; echo rc=$?", check_code=0)
         self.assertIn("rc=2", p.stdout)
         self.assertIn("already inside", p.stderr)
