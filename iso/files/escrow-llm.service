@@ -1,0 +1,31 @@
+[Unit]
+Description=Escrow OS local model for `escrow explain` (llama.cpp, localhost only)
+Documentation=file:///usr/share/doc/escrow/README.md
+After=network.target
+ConditionPathExists=/usr/share/escrow/models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+
+[Service]
+ExecStart=/usr/bin/llama-server -m /usr/share/escrow/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+    --host 127.0.0.1 --port 8080 -c 8192 -t 2
+# The model server gets no privileges and no access to anyone's files.
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressAllow=localhost
+IPAddressDeny=any
+SystemCallFilter=@system-service
+MemoryMax=3G
+CPUQuota=200%
+Nice=10
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
