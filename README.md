@@ -103,7 +103,7 @@ escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota,
 | Nothing else writable | Mount propagation (`MS_PRIVATE`), read-only bind remounts, locked mount flags in user namespaces | `sandbox.py` `lock_down_rest` |
 | Syscall filter | seccomp-BPF, written by hand: arch check, deny ptrace, process_vm_*, module load, kexec, bpf, perf, all mount APIs, reboot, swap, open_by_handle_at, io_uring, raw/packet sockets | `core/escrow/seccomp.py` |
 | No privilege escalation | `PR_SET_NO_NEW_PRIVS`: setuid binaries (sudo) cannot gain root | `seccomp.py` |
-| Resource limits | cgroup v2 via a systemd scope: memory, CPU quota, max tasks (stops fork bombs) | `core/escrow/cli.py` `cmd_run` |
+| Resource limits | cgroup v2 via a systemd scope: memory (with `MemorySwapMax=0`, so a hog can't spill into swap), CPU quota, max tasks (stops fork bombs) | `core/escrow/cli.py` `cmd_run` |
 | Process lifecycle | PID 1 reaping; when the agent exits, the kernel kills everything left in its PID namespace | `sandbox.py` `init_process` |
 | Commit | Optimistic concurrency control: a file that changed on disk since the session started is a conflict, and the first committer wins. Atomic `rename()` means readers never see half a file | `changes.py` `apply` |
 | 3-way merge | On a conflict, `git merge-file` merges (disk now, base, agent copy). The base is snapshotted when the agent exits. Non-overlapping edits merge cleanly; overlapping ones are refused, or written with conflict markers (`--markers`) | `changes.py` `three_way` |
@@ -124,10 +124,10 @@ escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota,
 python3 -m unittest -v tests/test_escrow.py
 ```
 
-35 end-to-end tests run real sessions against real files. They cover staging,
+36 end-to-end tests run real sessions against real files. They cover staging,
 commit, partial commit, replaced dirs, symlinks, mode changes, conflicts,
 discard, read-only system dirs and cgroup files, hidden session data, the PID
-namespace, cgroup limits, the fork bomb, seccomp, sudo, the offline profile,
+namespace, cgroup limits, the fork bomb, the memory limit without swap, seccomp, sudo, the offline profile,
 nesting, the network log, decoys and the tripwire, the policy gate, mass-delete
 warnings, ledger tamper detection, the strict profile, abstract-socket scoping,
 `escrow kill`, clean and conflicting 3-way merges, `explain` (against a stub

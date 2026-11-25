@@ -204,6 +204,18 @@ class EscrowTest(unittest.TestCase):
                "--tasks", "40", check_code=0)
         self.assertIn("stopped at", p.stdout)
 
+    def test_memory_limit_cannot_spill_into_swap(self):
+        # MemorySwapMax=0: a hog is OOM-killed at MemoryMax instead of pushing
+        # the excess into swap (which, with swap on, reached 3x the limit).
+        p = sh("cat /sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/memory.swap.max;"
+               "python3 -c \"\nb=[]\nfor i in range(16):\n"
+               "    b.append(bytes([1])*(32<<20)); print('MB', (i+1)*32, flush=True)\"",
+               "--memory", "128M")
+        self.assertEqual(p.stdout.split()[0], "0")
+        reached = [int(l.split()[1]) for l in p.stdout.splitlines() if l.startswith("MB")]
+        self.assertIn(p.returncode, (137, 143))  # OOM SIGKILL, or systemd stops the scope (SIGTERM)
+        self.assertLess(max(reached or [0]), 160)
+
     def test_seccomp_blocks_ptrace_and_mount(self):
         p = sh("python3 -c \"import ctypes,os;l=ctypes.CDLL(None,use_errno=True);"
                "print('ptrace', l.ptrace(0,0,0,0), ctypes.get_errno())\";"
@@ -242,7 +254,7 @@ class EscrowTest(unittest.TestCase):
         p = sh("ls ~/.ssh; cat ~/.aws/credentials > /dev/null; sleep 5; echo SURVIVED")
         self.assertIn("id_rsa", p.stdout)
         self.assertNotIn("SURVIVED", p.stdout)
-        self.assertEqual(p.returncode, 137)  # SIGKILL
+        self.assertIn(p.returncode, (137, 143))  # OOM SIGKILL, or systemd stops the scope (SIGTERM)  # SIGKILL
         self.assertIn("TRIPWIRE", p.stderr)
         self.assertIn("TAINTED", p.stderr)
         self.assertIn("tripwire", escrow("log").stdout)

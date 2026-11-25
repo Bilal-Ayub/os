@@ -5,4 +5,4 @@ user/mount/PID namespaces, with a seccomp filter and cgroup v2 limits. Nothing
 it writes reaches the real files until a human reviews the diff and commits.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"

@@ -117,7 +117,8 @@ def cmd_run(args):
     if not args.no_cgroup and _have_user_systemd():
         launch = ["systemd-run", "--user", "--scope", "--quiet", "--collect",
                   f"--unit={s.meta['unit']}",
-                  "-p", f"MemoryMax={args.memory}", "-p", f"CPUQuota={args.cpu}",
+                  "-p", f"MemoryMax={args.memory}", "-p", "MemorySwapMax=0",
+                  "-p", f"CPUQuota={args.cpu}",
                   "-p", f"TasksMax={args.tasks}", "--"] + launch
         s.meta["cgroup"] = f"{s.meta['unit']}.scope"
     else:
