@@ -1,0 +1,66 @@
+#!/bin/sh
+# Escrow OS branding. The identity files belong to base-files, so we move
+# Ubuntu's copies aside with dpkg-divert (base-files upgrades then update the
+# diverted copy) and generate ours from them. Generating, not shipping, keeps
+# the codename and version right on whichever Ubuntu release this lands on.
+set -e
+PKG=escrow-branding
+ESCROW_VERSION="@VERSION@"
+HOME_URL="@HOME_URL@"
+
+divert() {  # divert <path>: Ubuntu's file -> <path>.ubuntu
+    dpkg-divert --package "$PKG" --add --rename --divert "$1.ubuntu" "$1" >/dev/null
+}
+
+if [ "$1" = "configure" ]; then
+    for f in /usr/lib/os-release /etc/lsb-release /etc/issue /etc/issue.net; do
+        divert "$f"
+    done
+
+    # values from Ubuntu's os-release, read in a subshell
+    eval "$(. /usr/lib/os-release.ubuntu
+            printf 'U_VERSION=%s\nU_VERSION_ID=%s\nU_CODENAME=%s\nU_PRETTY=%s\n' \
+              "'$VERSION'" "'$VERSION_ID'" "'${UBUNTU_CODENAME:-$VERSION_CODENAME}'" "'$PRETTY_NAME'")"
+    SHORT="${ESCROW_VERSION%.*}"     # 0.3.0 -> 0.3
+
+    {
+        echo "PRETTY_NAME=\"Escrow OS $SHORT (based on $U_PRETTY)\""
+        echo "NAME=\"Escrow OS\""
+        echo "VERSION=\"$SHORT (based on Ubuntu $U_VERSION)\""
+        echo "VERSION_ID=\"$U_VERSION_ID\""
+        echo "VERSION_CODENAME=$U_CODENAME"
+        echo "UBUNTU_CODENAME=$U_CODENAME"
+        echo "# ID stays ubuntu: apt, PPAs and add-apt-repository key off it."
+        echo "# The os-release spec's VARIANT fields carry our identity instead."
+        echo "ID=ubuntu"
+        echo "ID_LIKE=debian"
+        echo "VARIANT=\"Agent-safe edition\""
+        echo "VARIANT_ID=escrow"
+        echo "BUILD_ID=escrow-$ESCROW_VERSION"
+        if [ -n "$HOME_URL" ]; then
+            echo "HOME_URL=\"$HOME_URL\""
+            echo "SUPPORT_URL=\"$HOME_URL#readme\""
+            echo "BUG_REPORT_URL=\"$HOME_URL/issues\""
+        fi
+        echo "LOGO=escrow-os"
+    } > /usr/lib/os-release
+    chmod 0644 /usr/lib/os-release
+
+    sed "s|^DISTRIB_DESCRIPTION=.*|DISTRIB_DESCRIPTION=\"Escrow OS $SHORT (based on $U_PRETTY)\"|" \
+        /etc/lsb-release.ubuntu > /etc/lsb-release
+    printf 'Escrow OS %s (based on %s) \\n \\l\nAI agents here run as reversible transactions: escrow ls | review | commit | discard\n\n' \
+        "$SHORT" "$U_PRETTY" > /etc/issue
+    printf 'Escrow OS %s (based on %s)\n' "$SHORT" "$U_PRETTY" > /etc/issue.net
+    chmod 0644 /etc/lsb-release /etc/issue /etc/issue.net
+
+    if command -v glib-compile-schemas >/dev/null 2>&1 && [ -d /usr/share/glib-2.0/schemas ]; then
+        glib-compile-schemas /usr/share/glib-2.0/schemas || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q -t /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+    if [ -x /usr/sbin/update-grub ] && [ -e /boot/grub/grub.cfg ]; then
+        update-grub 2>/dev/null || echo "escrow-branding: run update-grub to rename the boot menu" >&2
+    fi
+fi
+exit 0

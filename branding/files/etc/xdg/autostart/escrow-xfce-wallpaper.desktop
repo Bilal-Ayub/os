@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Escrow OS wallpaper
+Comment=Set the Escrow OS wallpaper once per user
+Exec=/usr/lib/escrow/escrow-xfce-wallpaper
+OnlyShowIn=XFCE;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

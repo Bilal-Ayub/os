@@ -1,0 +1,11 @@
+#!/bin/sh
+# Escrow OS message of the day (shown at login after the Ubuntu header).
+printf '\n'
+printf '  Escrow OS: AI agents run as reversible transactions.\n'
+printf '  Agents (claude, codex, gemini, copilot, goose, aider) start inside escrow.\n'
+printf '  Review their work with:  escrow ls | escrow review | escrow commit | escrow discard\n'
+if [ -n "$USER" ] && [ "$USER" != root ] && command -v escrow >/dev/null 2>&1; then
+    n=$(escrow ls -q 2>/dev/null | wc -l)
+    [ "${n:-0}" -gt 0 ] && printf '  You have %s escrow session(s) on record.\n' "$n"
+fi
+printf '  Based on Ubuntu. Not affiliated with or endorsed by Canonical.\n'

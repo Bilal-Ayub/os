@@ -60,4 +60,28 @@ done
 install -D -m 0644 "$REPO/core/etc/profile.d/escrow.sh" "$R/etc/profile.d/escrow.sh"
 finish escrow-shims
 
+# ---- escrow-branding
+# HOME_URL for os-release: the git remote as an https URL, if there is one.
+HOME_URL="$(git -c safe.directory="$REPO" -C "$REPO" remote get-url origin 2>/dev/null \
+    | sed -e 's|^git@github.com:|https://github.com/|' -e 's|\.git$||')" || HOME_URL=""
+R="$STAGE/escrow-branding"
+B="$REPO/branding"
+control escrow-branding
+sed -i "s|@VERSION@|$VERSION|g; s|@HOME_URL@|$HOME_URL|g" "$R/DEBIAN/postinst"
+install -D -m 0755 "$B/files/etc/update-motd.d/05-escrow"   "$R/etc/update-motd.d/05-escrow"
+install -D -m 0644 "$B/files/etc/default/grub.d/escrow.cfg" "$R/etc/default/grub.d/escrow.cfg"
+install -D -m 0644 "$B/files/etc/xdg/autostart/escrow-xfce-wallpaper.desktop" \
+                                                          "$R/etc/xdg/autostart/escrow-xfce-wallpaper.desktop"
+install -D -m 0755 "$B/files/usr/lib/escrow/escrow-xfce-wallpaper" "$R/usr/lib/escrow/escrow-xfce-wallpaper"
+install -D -m 0644 "$B/files/usr/share/glib-2.0/schemas/90_escrow-branding.gschema.override" \
+                                                          "$R/usr/share/glib-2.0/schemas/90_escrow-branding.gschema.override"
+install -D -m 0644 "$B/art/escrow-wallpaper.png"            "$R/usr/share/backgrounds/escrow/escrow-wallpaper.png"
+install -D -m 0644 "$B/art/escrow-os.png"                   "$R/usr/share/icons/hicolor/256x256/apps/escrow-os.png"
+install -D -m 0644 "$B/art/escrow-os.png"                   "$R/usr/share/pixmaps/escrow-os.png"
+install -D -m 0644 "$REPO/LICENSE"                          "$R/usr/share/doc/escrow-branding/copyright"
+printf '%s\n' /etc/update-motd.d/05-escrow /etc/default/grub.d/escrow.cfg \
+    /etc/xdg/autostart/escrow-xfce-wallpaper.desktop > "$R/DEBIAN/conffiles"
+chmod 0644 "$R/DEBIAN/conffiles"
+finish escrow-branding
+
 ls -l "$OUT"/*.deb

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Set the Escrow OS wallpaper on every Xfce monitor/workspace, once per user.
+# Started from /etc/xdg/autostart (Xfce only). Delete the marker to run again.
+MARK="${XDG_CONFIG_HOME:-$HOME/.config}/escrow/xfce-wallpaper-set"
+IMG=/usr/share/backgrounds/escrow/escrow-wallpaper.png
+[ -e "$MARK" ] && exit 0
+command -v xfconf-query >/dev/null 2>&1 || exit 0
+sleep 3   # let xfdesktop create its properties first
+for p in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$'); do
+    xfconf-query -c xfce4-desktop -p "$p" -s "$IMG"
+done
+mkdir -p "$(dirname "$MARK")" && touch "$MARK"

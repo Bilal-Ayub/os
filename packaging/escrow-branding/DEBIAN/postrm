@@ -1,0 +1,19 @@
+#!/bin/sh
+# Put Ubuntu's identity files back.
+set -e
+PKG=escrow-branding
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    for f in /usr/lib/os-release /etc/lsb-release /etc/issue /etc/issue.net; do
+        if dpkg-divert --listpackage "$f" 2>/dev/null | grep -qx "$PKG"; then
+            rm -f "$f"
+            dpkg-divert --package "$PKG" --remove --rename --divert "$f.ubuntu" "$f" >/dev/null
+        fi
+    done
+    if command -v glib-compile-schemas >/dev/null 2>&1 && [ -d /usr/share/glib-2.0/schemas ]; then
+        glib-compile-schemas /usr/share/glib-2.0/schemas || true
+    fi
+    if [ -x /usr/sbin/update-grub ] && [ -e /boot/grub/grub.cfg ]; then
+        update-grub 2>/dev/null || true
+    fi
+fi
+exit 0
