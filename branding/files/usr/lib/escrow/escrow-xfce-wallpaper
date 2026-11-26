@@ -1,12 +1,22 @@
 #!/bin/sh
-# Set the Escrow OS wallpaper on every Xfce monitor/workspace, once per user.
+# Set the Escrow OS wallpaper on every Xfce monitor, once per user.
 # Started from /etc/xdg/autostart (Xfce only). Delete the marker to run again.
+# xfdesktop 4.20 only creates backdrop properties once the user changes
+# something, so on a fresh account we create them for each connected monitor.
 MARK="${XDG_CONFIG_HOME:-$HOME/.config}/escrow/xfce-wallpaper-set"
 IMG=/usr/share/backgrounds/escrow/escrow-wallpaper.png
 [ -e "$MARK" ] && exit 0
 command -v xfconf-query >/dev/null 2>&1 || exit 0
-sleep 3   # let xfdesktop create its properties first
+sleep 3   # let xfdesktop start first
+set_ok=
 for p in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$'); do
-    xfconf-query -c xfce4-desktop -p "$p" -s "$IMG"
+    xfconf-query -c xfce4-desktop -p "$p" -s "$IMG" && set_ok=1
 done
-mkdir -p "$(dirname "$MARK")" && touch "$MARK"
+if [ -z "$set_ok" ] && command -v xrandr >/dev/null 2>&1; then
+    for m in $(xrandr --listmonitors 2>/dev/null | awk 'NR>1 {print $NF}'); do
+        xfconf-query -c xfce4-desktop -n -t string \
+            -p "/backdrop/screen0/monitor$m/workspace0/last-image" -s "$IMG" && set_ok=1
+    done
+fi
+[ -n "$set_ok" ] && mkdir -p "$(dirname "$MARK")" && touch "$MARK"
+exit 0

@@ -111,12 +111,16 @@ if [ "$MODEL" != none ]; then
     sed -i 's|^# url = "http://127.0.0.1:8080/v1"|url = "http://127.0.0.1:8080/v1"|' "$ROOT/etc/escrow/escrow.toml"
 fi
 
-# Desktop defaults: Escrow wallpaper for Xfce (system default) and the LightDM greeter.
+# Live session: stage escrow sessions on tmpfs (the live root is an overlayfs,
+# which overlayfs cannot use as an upper dir). Inert on an installed system.
+install -D -m 0644 "$REPO/iso/files/var-lib-escrow.mount" "$ROOT/etc/systemd/system/var-lib-escrow.mount"
+mkdir -p "$ROOT/etc/systemd/system/local-fs.target.wants"
+ln -sf /etc/systemd/system/var-lib-escrow.mount "$ROOT/etc/systemd/system/local-fs.target.wants/var-lib-escrow.mount"
+
+# Desktop: the Xfce wallpaper is set per user at first login by escrow-branding's
+# autostart helper (xfdesktop 4.20 has no system-wide image key to edit).
+# LightDM greeter background:
 WP=/usr/share/backgrounds/escrow/escrow-wallpaper.png
-find "$ROOT/etc/xdg" -name xfce4-desktop.xml 2>/dev/null | while read -r f; do
-    sed -i -E "s#(name=\"(last-image|image-path)\"[^>]*value=\")[^\"]*#\1$WP#g" "$f"
-    echo "wallpaper default set in ${f#$ROOT}"
-done
 if [ -d "$ROOT/etc/lightdm" ]; then
     mkdir -p "$ROOT/etc/lightdm/lightdm-gtk-greeter.conf.d"
     printf '[greeter]\nbackground=%s\n' "$WP" > "$ROOT/etc/lightdm/lightdm-gtk-greeter.conf.d/90-escrow.conf"
