@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Escrow OS wallpaper
-Comment=Set the Escrow OS wallpaper once per user
+Name=Escrow OS look
+Comment=Set the Escrow OS wallpaper and dark theme once per user
 Exec=/usr/lib/escrow/escrow-xfce-wallpaper
 OnlyShowIn=XFCE;
 NoDisplay=true

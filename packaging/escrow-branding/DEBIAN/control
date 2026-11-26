@@ -5,10 +5,11 @@ Maintainer: Escrow OS Team <team@escrow-os.invalid>
 Depends: escrow (= @VERSION@), escrow-shims (= @VERSION@)
 Section: misc
 Priority: optional
-Description: Escrow OS identity: name, login banner, wallpaper, logo
+Description: Escrow OS identity: name, login banner, wallpaper, dark theme, logo
  Turns an Ubuntu install into Escrow OS: os-release (NAME, PRETTY_NAME,
  VARIANT_ID=escrow; ID stays "ubuntu" so apt and PPAs keep working),
  lsb-release description, /etc/issue, a message of the day showing escrow
- sessions, the GRUB menu name, a default wallpaper (GNOME and Xfce) and a logo.
+ sessions, the GRUB menu name, a default wallpaper and dark theme (GNOME and
+ Xfce) and a logo.
  The original files are kept with dpkg-divert and restored on removal.
  Escrow OS is based on Ubuntu and is not affiliated with Canonical.

@@ -117,13 +117,15 @@ install -D -m 0644 "$REPO/iso/files/var-lib-escrow.mount" "$ROOT/etc/systemd/sys
 mkdir -p "$ROOT/etc/systemd/system/local-fs.target.wants"
 ln -sf /etc/systemd/system/var-lib-escrow.mount "$ROOT/etc/systemd/system/local-fs.target.wants/var-lib-escrow.mount"
 
-# Desktop: the Xfce wallpaper is set per user at first login by escrow-branding's
+# Desktop: the Xfce wallpaper and dark theme are set per user at first login by escrow-branding's
 # autostart helper (xfdesktop 4.20 has no system-wide image key to edit).
-# LightDM greeter background:
-WP=/usr/share/backgrounds/escrow/escrow-wallpaper.png
+# LightDM greeter: wallpaper and dark theme (Greybird-dark ships with Xubuntu):
+WP=/usr/share/backgrounds/escrow/escrow-wallpaper.jpg
 if [ -d "$ROOT/etc/lightdm" ]; then
     mkdir -p "$ROOT/etc/lightdm/lightdm-gtk-greeter.conf.d"
-    printf '[greeter]\nbackground=%s\n' "$WP" > "$ROOT/etc/lightdm/lightdm-gtk-greeter.conf.d/90-escrow.conf"
+    { printf '[greeter]\nbackground=%s\n' "$WP"
+      [ -d "$ROOT/usr/share/themes/Greybird-dark" ] && echo "theme-name=Greybird-dark"
+    } > "$ROOT/etc/lightdm/lightdm-gtk-greeter.conf.d/90-escrow.conf"
 fi
 # The installed system's GRUB menu: written by update-grub on install, reads grub.d/escrow.cfg.
 

@@ -1,13 +1,26 @@
 #!/bin/sh
-# Set the Escrow OS wallpaper on every Xfce monitor, once per user.
+# Escrow OS look for Xfce: wallpaper on every monitor + dark theme, once per user.
 # Started from /etc/xdg/autostart (Xfce only). Delete the marker to run again.
 # xfdesktop 4.20 only creates backdrop properties once the user changes
 # something, so on a fresh account we create them for each connected monitor.
-MARK="${XDG_CONFIG_HOME:-$HOME/.config}/escrow/xfce-wallpaper-set"
-IMG=/usr/share/backgrounds/escrow/escrow-wallpaper.png
+MARK="${XDG_CONFIG_HOME:-$HOME/.config}/escrow/xfce-look-v2"
+IMG=/usr/share/backgrounds/escrow/escrow-wallpaper.jpg
 [ -e "$MARK" ] && exit 0
 command -v xfconf-query >/dev/null 2>&1 || exit 0
-sleep 3   # let xfdesktop start first
+sleep 3   # let xfdesktop and xfsettingsd start first
+
+setstr() {  # setstr <channel> <property> <value>: create the property if missing
+    xfconf-query -c "$1" -p "$2" -s "$3" 2>/dev/null ||
+        xfconf-query -c "$1" -p "$2" -n -t string -s "$3"
+}
+
+# Dark theme: Greybird-dark ships with Xubuntu; Adwaita-dark is built into GTK 3.
+if [ -d /usr/share/themes/Greybird-dark ]; then GTK=Greybird-dark; else GTK=Adwaita-dark; fi
+setstr xsettings /Net/ThemeName "$GTK"
+[ -d /usr/share/icons/elementary-xfce-dark ] && setstr xsettings /Net/IconThemeName elementary-xfce-dark
+[ -d /usr/share/themes/Greybird-dark/xfwm4 ] && setstr xfwm4 /general/theme Greybird-dark
+
+# Wallpaper
 set_ok=
 for p in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$'); do
     xfconf-query -c xfce4-desktop -p "$p" -s "$IMG" && set_ok=1

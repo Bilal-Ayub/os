@@ -1,3 +1,13 @@
 build/
 __pycache__/
 *.pyc
+
+# working notes, not part of the submission
+HANDOFF.md
+docs/HANDOFF.md
+docs/viva-explainer.md
+
+# large build outputs
+*.iso
+*.iso.sha256
+*.log

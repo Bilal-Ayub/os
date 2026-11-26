@@ -1,8 +1,12 @@
-# Escrow OS default wallpaper for GNOME (stock Ubuntu desktop).
+# Escrow OS defaults for GNOME (stock Ubuntu desktop): wallpaper and dark theme.
 [org.gnome.desktop.background]
-picture-uri='file:///usr/share/backgrounds/escrow/escrow-wallpaper.png'
-picture-uri-dark='file:///usr/share/backgrounds/escrow/escrow-wallpaper.png'
+picture-uri='file:///usr/share/backgrounds/escrow/escrow-wallpaper.jpg'
+picture-uri-dark='file:///usr/share/backgrounds/escrow/escrow-wallpaper.jpg'
 picture-options='zoom'
 
 [org.gnome.desktop.screensaver]
-picture-uri='file:///usr/share/backgrounds/escrow/escrow-wallpaper.png'
+picture-uri='file:///usr/share/backgrounds/escrow/escrow-wallpaper.jpg'
+
+[org.gnome.desktop.interface]
+color-scheme='prefer-dark'
+gtk-theme='Yaru-dark'

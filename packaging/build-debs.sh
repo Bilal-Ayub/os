@@ -76,7 +76,7 @@ install -D -m 0644 "$B/files/etc/xdg/autostart/escrow-xfce-wallpaper.desktop" \
 install -D -m 0755 "$B/files/usr/lib/escrow/escrow-xfce-wallpaper" "$R/usr/lib/escrow/escrow-xfce-wallpaper"
 install -D -m 0644 "$B/files/usr/share/glib-2.0/schemas/90_escrow-branding.gschema.override" \
                                                           "$R/usr/share/glib-2.0/schemas/90_escrow-branding.gschema.override"
-install -D -m 0644 "$B/art/escrow-wallpaper.png"            "$R/usr/share/backgrounds/escrow/escrow-wallpaper.png"
+install -D -m 0644 "$B/art/escrow-wallpaper.jpg"            "$R/usr/share/backgrounds/escrow/escrow-wallpaper.jpg"
 install -D -m 0644 "$B/art/escrow-os.png"                   "$R/usr/share/icons/hicolor/256x256/apps/escrow-os.png"
 install -D -m 0644 "$B/art/escrow-os.png"                   "$R/usr/share/pixmaps/escrow-os.png"
 install -D -m 0644 "$REPO/LICENSE"                          "$R/usr/share/doc/escrow-branding/copyright"

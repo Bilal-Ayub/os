@@ -310,8 +310,9 @@ rich(p, "**Distribution.** Escrow OS is Ubuntu 26.04 LTS plus three packages. `e
         "`escrow-shims` registers claude, codex, gemini, copilot, goose and aider in `/etc/escrow/agents.d`; "
         "`escrow-branding` diverts `os-release`, `lsb-release` and `/etc/issue` with `dpkg-divert` and "
         "regenerates them as Escrow OS, keeping `ID=ubuntu` for package tooling and using the os-release "
-        "`VARIANT_ID` field [16]. It also sets the GRUB name, login message, wallpaper and logo, and restores "
-        "Ubuntu's files on removal.")
+        "`VARIANT_ID` field [16]. It also sets the GRUB name, login message, wallpaper, a dark theme and logo, "
+        "and restores Ubuntu's files on removal. A remastered Xubuntu ISO (live + installer, Secure Boot kept) "
+        "boots in QEMU.")
 
 sub("Experimental Setup")
 para(f"All measurements ran on an Intel Core i5-1035G1 laptop (4 cores, 8 threads, no GPU, 16 GB RAM) under "
@@ -463,7 +464,7 @@ sub("Limitations")
 para("Discard cannot undo network effects such as uploads or `git push` [12]; escrow can only show them "
      "before the decision. The agent has the user's permissions, so it cannot stage changes to root-owned "
      "files. In the default profile it can still read non-secret files. On WSL2, `/usr` contains submounts and "
-     "is made read-only instead of staged. The AppArmor profile is untested, because WSL2 has no AppArmor. "
+     "is made read-only instead of staged. AppArmor was tested only on the live ISO, as WSL2 has none. "
      "inotify does not report which process opened a decoy, the ledger is tamper-evident rather than "
      "tamper-proof, tools that need nested sandboxes fail, and the shims are a default, not a boundary: an "
      "agent run by its full path bypasses them. Undo covers files only. All measurements come from one machine under WSL2.")
@@ -487,7 +488,7 @@ REFS = [
     "The Linux Kernel Documentation, “Overlay Filesystem.” [Online]. Available: https://docs.kernel.org/filesystems/overlayfs.html",
     "C. Wang and Y. Zheng, “Confining AI agent code with unprivileged Linux primitives (Sandlock),” arXiv:2605.26298, 2026.",
     "C. Wang and Y. Zheng, “Fork, explore, commit: OS primitives for agentic exploration,” arXiv:2602.08199, 2026.",
-    "Alibaba Cloud, “Alibaba Cloud Linux 4 Agentic Edition” and “ws-ckpt,” documentation, 2026. [Online]. Available: https://www.alibabacloud.com/help/en/alinux/",
+    "Alibaba Cloud, “Alibaba Cloud Linux 4 Agentic Edition” and “ws-ckpt,” documentation, 2026.",
     "harshit3355, “airbag,” GitHub, 2026. [Online]. Available: https://github.com/harshit3355/airbag",
     "“Aegis OS: an agent operating system runtime,” arXiv:2611.08516, 2026.",
     "The Linux Kernel Documentation, “Seccomp BPF (SECure COMPuting with filters).” [Online]. Available: https://docs.kernel.org/userspace-api/seccomp_filter.html",
@@ -498,7 +499,7 @@ REFS = [
     "S. G. Patil et al., “GoEX: Perspectives and designs towards a runtime for autonomous LLM applications,” arXiv:2404.06921, 2024.",
     "G. Gerganov et al., “llama.cpp,” GitHub. [Online]. Available: https://github.com/ggml-org/llama.cpp",
     "Qwen Team, “Qwen2.5 technical report,” arXiv:2412.15115, 2024.",
-    "freedesktop.org, “os-release — operating system identification.” [Online]. Available: https://www.freedesktop.org/software/systemd/man/latest/os-release.html",
+    "freedesktop.org, “os-release — operating system identification,” systemd manual.",
     "“DeltaBox: fast checkpoint and rollback for agent sandboxes,” arXiv:2605.22781, 2026.",
 ]
 for i, ref in enumerate(REFS, 1):

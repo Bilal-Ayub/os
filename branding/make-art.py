@@ -1,10 +1,12 @@
-"""Generate the Escrow OS wallpaper and logo (original artwork, no third-party marks).
+"""Generate the Escrow OS logo (original artwork, no third-party marks).
 
     python branding/make-art.py        (needs Pillow)
 
-Writes branding/art/escrow-wallpaper.png (1920x1080) and branding/art/escrow-os.png
-(256x256). The motif is the overlay idea itself: a translucent "upper" sheet lying
-over a "lower" page, offset, with a tick (commit) where the two meet.
+Writes branding/art/escrow-os.png (256x256). The motif is the overlay idea itself:
+a translucent "upper" sheet lying over a "lower" page, offset, with a tick (commit)
+where the two meet. The desktop wallpaper (branding/art/escrow-wallpaper.jpg) is
+supplied artwork; `python branding/make-art.py --wallpaper` writes the older
+generated one to branding/art/escrow-wallpaper-generated.png.
 """
 import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -78,6 +80,8 @@ def wallpaper(W=1920, H=1080):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    wallpaper().save(os.path.join(OUT, "escrow-wallpaper.png"), optimize=True)
+    import sys
+    if "--wallpaper" in sys.argv:
+        wallpaper().save(os.path.join(OUT, "escrow-wallpaper-generated.png"), optimize=True)
     emblem(256).save(os.path.join(OUT, "escrow-os.png"), optimize=True)
     print("wrote", os.listdir(OUT))
