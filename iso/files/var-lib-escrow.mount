@@ -4,7 +4,9 @@ Documentation=file:///usr/share/doc/escrow/README.md
 # The live root is itself an overlayfs, and overlayfs refuses another overlayfs
 # as its upper directory, so escrow cannot stage under the live /var/lib/escrow.
 # An installed system (ext4/btrfs) never matches this condition.
-ConditionKernelCommandLine=boot=casper
+# casper mounts the squashfs at /rofs; 26.04 no longer puts boot=casper on
+# the kernel command line, so test for the mount instead.
+ConditionPathIsMountPoint=/rofs
 DefaultDependencies=no
 Conflicts=umount.target
 Before=local-fs.target umount.target
