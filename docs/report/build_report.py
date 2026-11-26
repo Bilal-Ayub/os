@@ -293,7 +293,10 @@ rich(p, "**Review and commit.** `escrow diff` turns the upper layer into added, 
         "is newer than the session start is a conflict. Escrow snapshots a base copy of each modified file "
         "when the agent exits, so a conflict is resolved with `git merge-file` (disk now, base, agent copy) "
         "when the edits do not overlap. Each file is written to a temporary file and moved into place with an "
-        "atomic `rename()`; deletions are applied last; commits can be partial. Every start, commit, discard, "
+        "atomic `rename()`; deletions are applied last; commits can be partial. Before a commit changes "
+        "anything, it copies every original it will overwrite or delete into a write-ahead undo journal, so "
+        "`escrow undo` can roll a committed session back; it refuses if a file changed after the commit. "
+        "Every start, commit, discard, "
         "freeze and tripwire is appended to a ledger in which record ^i^ stores "
         "^h^(^i^) = SHA-256(^h^(^i^−1) ‖ ^r^(^i^)), and `escrow verify` finds the first broken link.")
 p = para()
@@ -324,7 +327,7 @@ para(f"All measurements ran on an Intel Core i5-1035G1 laptop (4 cores, 8 thread
      "was frozen" + (f", {trip['n']} runs" if trip else "") +
      (f"; and (6) `escrow explain` on the rogue-agent session from the demo, {len(ex_runs)} runs with "
       f"Qwen2.5-1.5B-Instruct [15] (Q4_K_M, 1.1 GB) on `llama-server` using 4 CPU threads." if ex else ".") +
-     " In addition, 36 end-to-end functional tests pass on the same machine.")
+     " In addition, 40 end-to-end functional tests pass on the same machine.")
 
 # ----------------------------------------------------------------- III results
 heading("Results")
@@ -462,8 +465,8 @@ para("Discard cannot undo network effects such as uploads or `git push` [12]; es
      "files. In the default profile it can still read non-secret files. On WSL2, `/usr` contains submounts and "
      "is made read-only instead of staged. The AppArmor profile is untested, because WSL2 has no AppArmor. "
      "inotify does not report which process opened a decoy, the ledger is tamper-evident rather than "
-     "tamper-proof, tools that need nested sandboxes fail, and an agent installed in `~/.local/bin` comes "
-     "before the shims on `PATH`. All measurements come from one machine under WSL2.")
+     "tamper-proof, tools that need nested sandboxes fail, and the shims are a default, not a boundary: an "
+     "agent run by its full path bypasses them. Undo covers files only. All measurements come from one machine under WSL2.")
 
 # ----------------------------------------------------------------- V conclusion
 heading("Conclusion and Future Work")
@@ -474,7 +477,7 @@ para("Escrow OS shows that a stock Ubuntu kernel already provides everything nee
      "it turns many per-command approvals into one informed decision per task.")
 para("Future work includes subordinate uid maps so that system changes can be staged and committed with "
      "`pkexec`, a per-agent egress allowlist, fanotify to attribute decoy access to a process, a signed ledger "
-     "head, undo after commit, a remastered live ISO with boot testing of the AppArmor profile, and an "
+     "head, AppArmor testing on an installed system, and an "
      "inference broker that schedules local-model requests from several agents with per-agent token quotas.")
 
 # ----------------------------------------------------------------- references
