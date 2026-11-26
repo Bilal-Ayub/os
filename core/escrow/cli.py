@@ -10,8 +10,8 @@ import subprocess
 import sys
 import time
 
-from . import __version__, changes, explain, ledger, netlog, policy, top
-from .session import (CLEAN, COMMITTED, DISCARDED, PENDING, RUNNING, EscrowError,
+from . import __version__, changes, explain, ledger, netlog, policy, top, undo
+from .session import (CLEAN, COMMITTED, DISCARDED, PENDING, RUNNING, UNDONE, EscrowError,
                       get_session, new_session, session_ids, state_root, warn, Session)
 
 PROFILES = {
@@ -256,7 +256,7 @@ def cmd_log(args):
 def _check_decidable(s):
     if s.is_running():
         raise EscrowError(f"session {s.id} is still running; wait for the agent to exit")
-    if s.status in (COMMITTED, DISCARDED, CLEAN):
+    if s.status in (COMMITTED, DISCARDED, CLEAN, UNDONE):
         raise EscrowError(f"session {s.id} is already {s.status}")
 
 
@@ -309,6 +309,7 @@ def _do_commit(s, selected, force, accept_risk, markers=False):
         s.remove_layers()
         s.update(status=COMMITTED, decided_ns=time.time_ns())
         print(f"escrow: committed {len(done)} change(s); session {s.id} is closed")
+    print(f"escrow: changed your mind? `escrow undo {s.id}` puts the old files back")
     return 0
 
 
@@ -395,6 +396,51 @@ def cmd_review(args):
         elif ans in ("q", "quit", ""):
             print(f"escrow: session {s.id} stays pending")
             return 0
+
+
+UNDO_VERB = {"remove": "delete (the commit created it)",
+             "rmdir": "delete dir if empty (the commit created it)",
+             "restore": "put back the original", "chmod": "put back the old mode"}
+
+
+def cmd_undo(args):
+    s = _session(args)
+    if s.is_running():
+        raise EscrowError(f"session {s.id} is still running")
+    journals = undo.pending(s)
+    if not journals:
+        why = {COMMITTED: "it was committed without an undo journal",
+               UNDONE: "it was already undone"}.get(s.status, f"it is {s.status}, nothing was committed")
+        raise EscrowError(f"session {s.id} has nothing to undo ({why})")
+    entries = [e for _, data in journals for e in data["entries"]]
+    print(f"Undo {len(journals)} commit(s) of session {s.id}:")
+    for e in sorted(entries, key=lambda e: e["path"]):
+        lost = "   ! NO BACKUP: cannot be undone" if e.get("lost") else ""
+        print(f"  {e['path']}: {UNDO_VERB[e['action']]}{lost}")
+    if not _confirm(f"Undo these {len(entries)} change(s) on the real filesystem?", args.yes):
+        print("escrow: aborted")
+        return 1
+    try:
+        res = undo.revert(s, force=args.force)
+    except undo.Conflict as e:
+        print("escrow: REFUSED: these paths changed after the commit, so undoing would "
+              "destroy those newer edits:", file=sys.stderr)
+        for p in e.paths:
+            print(f"  {p}", file=sys.stderr)
+        print("escrow: nothing was undone. Re-run with --force to put the old files back anyway.",
+              file=sys.stderr)
+        return 1
+    ledger.append(s.root, "undo", session=s.id, commits=res["commits"], forced=args.force,
+                  restored=res["restored"], removed=res["removed"],
+                  kept=res["kept"], lost=res["lost"])
+    if s.status == COMMITTED:
+        s.update(status=UNDONE, decided_ns=time.time_ns())
+    print(f"escrow: undid session {s.id}: {res['restored']} restored, {res['removed']} removed")
+    for p in res["kept"]:
+        warn(f"kept {p}: the commit created it, but it has new files in it now")
+    for p in res["lost"]:
+        warn(f"could not restore {p}: it had no backup")
+    return 0
 
 
 # ---------------------------------------------------------------- explain
@@ -551,6 +597,13 @@ def build_parser():
     x.add_argument("id", nargs="?", type=int)
     x.add_argument("-y", "--yes", action="store_true", help="do not ask for confirmation")
     x.set_defaults(func=cmd_discard)
+
+    u = sub.add_parser("undo", help="roll back a committed session (puts the old files back)")
+    u.add_argument("id", nargs="?", type=int)
+    u.add_argument("--force", action="store_true",
+                   help="also undo paths that were changed again after the commit")
+    u.add_argument("-y", "--yes", action="store_true", help="do not ask for confirmation")
+    u.set_defaults(func=cmd_undo)
 
     for action, text in (("freeze", "pause every process of a running session (cgroup.freeze)"),
                          ("thaw", "resume a frozen session"),

@@ -381,6 +381,9 @@ def apply(session, changes, force=False, markers=False):
                 mergeable.append(path)
         if unresolved:
             raise Conflict(unresolved, mergeable)
+    # 0. write-ahead undo log: back up every original before touching anything
+    from . import undo
+    journal = undo.prepare(session, changes)
     done, skipped = [], []
     # 1. directories, parents first
     for c in sorted((c for c in changes if c.ftype == "dir" and c.kind != DELETED),
@@ -408,6 +411,7 @@ def apply(session, changes, force=False, markers=False):
                     key=lambda c: c.path.count("/"), reverse=True):
         _remove_real(c.path)
         done.append(c)
+    undo.finish(journal)
     _forget(session, done)
     for c in done:
         try:

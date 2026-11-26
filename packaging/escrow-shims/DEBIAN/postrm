@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+# Take out the line postinst added to /etc/bash.bashrc.
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if [ -f /etc/bash.bashrc ] && grep -qF '# escrow-shims' /etc/bash.bashrc; then
+        sed -i '/# escrow-shims$/d' /etc/bash.bashrc
+    fi
+fi
+exit 0

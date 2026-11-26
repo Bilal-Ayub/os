@@ -58,6 +58,7 @@ for f in "$REPO"/core/etc/agents.d/*.toml; do
     ln -s ../escrow-shim "$R/usr/lib/escrow/shims/$name"
 done
 install -D -m 0644 "$REPO/core/etc/profile.d/escrow.sh" "$R/etc/profile.d/escrow.sh"
+install -D -m 0644 "$REPO/core/etc/escrow/path.sh"     "$R/etc/escrow/path.sh"
 finish escrow-shims
 
 # ---- escrow-branding

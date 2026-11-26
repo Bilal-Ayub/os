@@ -7,6 +7,8 @@ Section: admin
 Priority: optional
 Description: start AI agent CLIs inside escrow by default
  Puts shims for claude, codex, gemini, copilot, goose and aider first on PATH
- (via /etc/profile.d/escrow.sh). Each shim runs the real agent through
+ and keeps them there, also after ~/.profile adds ~/.local/bin (via
+ /etc/escrow/path.sh, sourced from /etc/profile.d/escrow.sh and a marked line
+ in /etc/bash.bashrc). Each shim runs the real agent through
  `escrow run` with the profile from /etc/escrow/agents.d/<agent>.toml.
  Inside a session the shims run the agent directly, so sessions never nest.

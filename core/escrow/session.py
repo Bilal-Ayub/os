@@ -7,6 +7,7 @@ A session directory looks like this:
         upper/<top>/  overlayfs upper layers: everything the agent wrote
         work/<top>/   overlayfs scratch directories (kernel-owned)
         net.log       strace record of every connect() the agent made
+        undo/<n>/     undo journal of each commit: backups of the originals
 """
 
 import json
@@ -22,8 +23,8 @@ import time
 STAGED_DIRS = ["/home", "/etc", "/opt", "/srv", "/usr"]
 SYSTEM_STATE = "/var/lib/escrow"
 
-RUNNING, PENDING, COMMITTED, DISCARDED, CLEAN = (
-    "running", "pending", "committed", "discarded", "no-changes")
+RUNNING, PENDING, COMMITTED, DISCARDED, CLEAN, UNDONE = (
+    "running", "pending", "committed", "discarded", "no-changes", "undone")
 
 
 class EscrowError(Exception):

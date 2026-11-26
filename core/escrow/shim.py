@@ -1,6 +1,6 @@
 """Make escrow the default for every agent CLI.
 
-/usr/lib/escrow/shims/ is put first on PATH (by /etc/profile.d/escrow.sh) and
+/usr/lib/escrow/shims/ is kept first on PATH (by /etc/escrow/path.sh) and
 holds one symlink per known agent (claude, codex, gemini, ...), all pointing
 to escrow-shim. The shim looks up the agent's profile in
 /etc/escrow/agents.d/<name>.toml, finds the real binary further down PATH and

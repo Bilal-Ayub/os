@@ -137,6 +137,9 @@ class EscrowTest(unittest.TestCase):
         self.assertIn(f"D  {h}/photos/2026", out)
         escrow("commit", "--yes")
         self.assertEqual(os.listdir(f"{h}/photos"), ["new.txt"])
+        escrow("undo", "--yes")
+        self.assertEqual(os.listdir(f"{h}/photos"), ["2026"])
+        self.assertTrue(os.path.isfile(f"{h}/photos/2026/cat.jpg"))
 
     def test_partial_commit_keeps_the_rest_pending(self):
         h = self.home
@@ -162,6 +165,92 @@ class EscrowTest(unittest.TestCase):
         self.assertEqual(read(f"{h}/notes.txt"), "human\n")
         escrow("commit", "--yes", "--force")
         self.assertEqual(read(f"{h}/notes.txt"), "agent\n")
+
+    # ------------------------------------------------------------ undo
+
+    def test_undo_restores_modified_added_deleted(self):
+        h = self.home
+        os.chmod(f"{h}/proj/src/calc.py", 0o640)
+        sh(f"echo hacked > {h}/notes.txt; rm -rf {h}/photos; mkdir -p {h}/proj/docs;"
+           f"echo doc > {h}/proj/docs/a.md; ln -sfn proj/docs {h}/link; chmod 600 {h}/proj/src/calc.py",
+           check_code=0)
+        escrow("commit", "--yes")
+        self.assertEqual(read(f"{h}/notes.txt"), "hacked\n")
+        self.assertFalse(os.path.exists(f"{h}/photos"))
+        p = escrow("undo", "--yes")
+        self.assertIn("undid session 1", p.stdout)
+        self.assertEqual(read(f"{h}/notes.txt"), "important\n")
+        with open(f"{h}/photos/2026/cat.jpg", "rb") as f:
+            self.assertEqual(f.read(), b"\xff\xd8\xff\x00binary")
+        self.assertFalse(os.path.exists(f"{h}/proj/docs"))
+        self.assertEqual(os.readlink(f"{h}/link"), "notes.txt")
+        self.assertEqual(stat.S_IMODE(os.stat(f"{h}/proj/src/calc.py").st_mode), 0o640)
+        self.assertEqual(sorted(os.listdir(h)), ["link", "notes.txt", "photos", "proj"])
+        self.assertIn("undone", escrow("ls").stdout)
+        self.assertIn("nothing to undo", escrow("undo", "--yes", check=False).stderr)
+        self.assertIn("already undone", escrow("commit", "--yes", check=False).stderr)
+        self.assertIn("ledger OK", escrow("verify").stdout)
+        self.assertIn("undo", escrow("ledger").stdout)
+
+    def test_undo_refuses_if_file_changed_after_commit(self):
+        h = self.home
+        sh(f"echo agent > {h}/notes.txt; echo new > {h}/new.txt", check_code=0)
+        escrow("commit", "--yes")
+        with open(f"{h}/notes.txt", "w") as f:  # the human keeps working on it
+            f.write("human\n")
+        p = escrow("undo", "--yes", check=False)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("REFUSED", p.stderr)
+        self.assertIn(f"{h}/notes.txt", p.stderr)
+        self.assertEqual(read(f"{h}/notes.txt"), "human\n")
+        self.assertTrue(os.path.exists(f"{h}/new.txt"))  # all or nothing
+        escrow("undo", "--yes", "--force")
+        self.assertEqual(read(f"{h}/notes.txt"), "important\n")
+        self.assertFalse(os.path.exists(f"{h}/new.txt"))
+
+    def test_undo_after_partial_commits(self):
+        h = self.home
+        sh(f"echo one > {h}/proj/one.txt; echo two > {h}/proj/two.txt; rm {h}/notes.txt", check_code=0)
+        escrow("commit", "1", f"{h}/proj/one.txt", "--yes")
+        escrow("commit", "1", f"{h}/notes.txt", "--yes")
+        self.assertFalse(os.path.exists(f"{h}/notes.txt"))
+        p = escrow("undo", "1", "--yes")
+        self.assertIn("Undo 2 commit(s)", p.stdout)
+        self.assertFalse(os.path.exists(f"{h}/proj/one.txt"))
+        self.assertEqual(read(f"{h}/notes.txt"), "important\n")
+        # the uncommitted rest is still staged and can still be decided
+        self.assertIn("two.txt", escrow("diff", "--stat").stdout)
+        self.assertIn("pending", escrow("ls").stdout)
+
+    # ------------------------------------------------------------ shims
+
+    def test_shims_stay_first_on_path(self):
+        path_sh = os.path.join(REPO, "core", "etc", "escrow", "path.sh")
+        shims = os.path.join(self.home, "shims")
+        local = os.path.join(self.home, ".local", "bin")
+        os.makedirs(shims)
+        env = dict(os.environ, ESCROW_SHIM_DIR=shims,
+                   PATH=f"{local}:/usr/bin:{shims}:/bin:{shims}")
+        env.pop("PROMPT_COMMAND", None)
+        want = f"{shims}:{local}:/usr/bin:/bin"
+        # what /etc/profile.d (sh, bash) and /etc/bash.bashrc do: shims moved to the front, once
+        for shell in ("/bin/sh", "/bin/bash"):
+            out = subprocess.run([shell, "-c", f'. "{path_sh}"; printf %s "$PATH"'],
+                                 env=env, capture_output=True, text=True).stdout
+            self.assertEqual(out, want, shell)
+        # interactive bash: ~/.profile prepends ~/.local/bin after the hook ran;
+        # the prompt hook (PROMPT_COMMAND) puts the shims back in front
+        rc = os.path.join(self.home, "rc")
+        with open(rc, "w") as f:
+            f.write(f'. "{path_sh}"\n. "{path_sh}"\nPATH="{local}:$PATH"\n')
+        out = subprocess.run(
+            ["/bin/bash", "--rcfile", rc, "-i", "-c",
+             'printf "%s|" "$PROMPT_COMMAND" "$PATH"; eval "$PROMPT_COMMAND"; printf %s "$PATH"'],
+            env=env, capture_output=True, text=True, start_new_session=True).stdout
+        prompt_cmd, before, after = out.split("|")
+        self.assertEqual(prompt_cmd, "_escrow_path")  # added once, though sourced twice
+        self.assertTrue(before.startswith(local + ":"))
+        self.assertEqual(after, f"{shims}:{local}:{local}:/usr/bin:/bin")
 
     def test_discard(self):
         h = self.home

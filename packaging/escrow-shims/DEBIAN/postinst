@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+# Terminal tabs on the desktop are non-login shells: they read /etc/bash.bashrc
+# but not /etc/profile.d. Ubuntu's bash.bashrc has no .d directory, so add one
+# marked line (removed again by postrm). It only runs in interactive shells.
+LINE='if [ -r /etc/escrow/path.sh ]; then . /etc/escrow/path.sh; fi  # escrow-shims'
+if [ "$1" = "configure" ] && [ -f /etc/bash.bashrc ]; then
+    grep -qF '# escrow-shims' /etc/bash.bashrc || printf '\n%s\n' "$LINE" >> /etc/bash.bashrc
+fi
+exit 0

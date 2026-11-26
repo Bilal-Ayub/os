@@ -6,7 +6,8 @@ AI coding agents (Claude Code, Codex, Gemini CLI, aider, ...) run shell commands
 with your full permissions: one bad step can delete files, rewrite `~/.bashrc`
 or leak secrets. On Escrow OS, every agent process runs on a **copy-on-write
 layer**. Nothing it writes reaches your real files until you **review the diff**
-and **commit**. **Discard** throws it all away.
+and **commit**. **Discard** throws it all away. Committed by mistake?
+**`escrow undo`** puts the old files back.
 
 ```
 $ claude                     # the shim starts it inside an escrow session automatically
@@ -27,8 +28,11 @@ bash packaging/build-debs.sh      # builds build/escrow_*.deb, build/escrow-shim
 sudo apt install ./build/escrow_*_all.deb ./build/escrow-shims_*_all.deb ./build/escrow-branding_*_all.deb
 ```
 
-Log out and back in (or `. /etc/profile.d/escrow.sh`) so the agent shims come
-first on `PATH`.
+Log out and back in (or `. /etc/escrow/path.sh`) so the agent shims come
+first on `PATH`. They stay first even after `~/.profile` adds `~/.local/bin`:
+`/etc/escrow/path.sh` is sourced from `/etc/profile.d` and (via one marked line
+that `escrow-shims` adds and removes) from `/etc/bash.bashrc`, and in
+interactive bash it runs again before every prompt.
 
 The three packages together turn a stock Ubuntu install into **Escrow OS**:
 
@@ -82,13 +86,14 @@ not in git; rebuild it with the commands above.
 | Command | What it does |
 |---|---|
 | `escrow run [--profile coding\|strict\|offline] [--memory 4G] [--cpu 200%] [--tasks 512] [--no-shield] -- CMD...` | Run CMD (default: `$SHELL`) in a new session |
-| `escrow ls [-q]` | List sessions and their status (running, pending, committed, discarded, no-changes; `!` = tainted) |
+| `escrow ls [-q]` | List sessions and their status (running, pending, committed, discarded, undone, no-changes; `!` = tainted) |
 | `escrow diff [ID] [PATHS] [--stat]` | Show staged changes as a unified diff (`A` added, `M` modified, `D` deleted, `R` replaced dir); risky changes are flagged |
 | `escrow log [ID] [--all]` | Session details, limits, events (Landlock, tripwire) and every network connection the agent made |
 | `escrow review [ID] [--explain]` | Taint warning + diff summary + network activity (marked irreversible), then commit / discard / view / quit |
 | `escrow explain [ID]` | Plain-English summary, risk level and concerns from a **local** LLM (advisory only) |
 | `escrow commit [ID] [PATHS] [--force] [--markers] [--accept-risk] [--yes]` | Apply all staged changes, or only those under PATHS (partial commit). Files changed on disk meanwhile are 3-way merged |
 | `escrow discard [ID] [--yes]` | Throw away every staged change |
+| `escrow undo [ID] [--force] [--yes]` | Roll back the commit(s) of a session: put back every file it overwrote or deleted, delete what it created. Refuses if a path changed again after the commit (unless `--force`) |
 | `escrow freeze` / `thaw` / `kill [ID]` | Pause, resume or kill every process of a running session (`cgroup.freeze`, `cgroup.kill`) |
 | `escrow ledger [--session N] [-n N] [--full]`, `escrow verify` | Show the hash-chained audit ledger; check that its chain is intact |
 | `escrow top [-i SECONDS] [--once]` | Live view of running sessions: CPU%, memory, tasks, pressure (PSI), staged size, network |
@@ -120,7 +125,8 @@ there. The demo then shows:
 - the policy gate refusing to commit;
 - the discard.
 
-Then it runs a second agent and commits just one of its files. Next, two
+Then it runs a second agent, commits just one of its files, and undoes that
+commit with `escrow undo`. Next, two
 agents edit the same README "at the same time", and the second commit is
 3-way merged. Finally it prints and verifies the ledger.
 
@@ -150,6 +156,7 @@ escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota,
 | Resource limits | cgroup v2 via a systemd scope: memory (with `MemorySwapMax=0`, so a hog can't spill into swap), CPU quota, max tasks (stops fork bombs) | `core/escrow/cli.py` `cmd_run` |
 | Process lifecycle | PID 1 reaping; when the agent exits, the kernel kills everything left in its PID namespace | `sandbox.py` `init_process` |
 | Commit | Optimistic concurrency control: a file that changed on disk since the session started is a conflict, and the first committer wins. Atomic `rename()` means readers never see half a file | `changes.py` `apply` |
+| Undo after commit | Write-ahead undo log: before commit touches anything, every original it will overwrite or delete is copied into the session's journal (`<session>/undo/<n>/`) and the journal is fsync'ed; only then are the changes applied. After the commit the journal records each path's SHA-256, so `escrow undo` can refuse if someone edited the file since (optimistic concurrency again). Files only: network effects can't be undone | `core/escrow/undo.py` |
 | 3-way merge | On a conflict, `git merge-file` merges (disk now, base, agent copy). The base is snapshotted when the agent exits. Non-overlapping edits merge cleanly; overlapping ones are refused, or written with conflict markers (`--markers`) | `changes.py` `three_way` |
 | Built-in AI | `escrow explain` sends the diff to a local OpenAI-compatible server (llama.cpp `llama-server` or Ollama) with a JSON schema. The diff is wrapped as untrusted input (prompt injection), and the deterministic findings are listed separately | `core/escrow/explain.py` |
 | Monitoring | `escrow top` reads each session's cgroup files (`cpu.stat`, `memory.current`, `pids.current`, `cpu.pressure`, `memory.pressure`), plus the upper-layer size and the network log | `core/escrow/top.py` |
@@ -159,7 +166,7 @@ escrow run ──► systemd-run --user --scope (cgroup v2: MemoryMax, CPUQuota,
 | Limits can't be lifted | The scope's cgroup files are owned by the user's uid, so `/sys/fs/cgroup` is remounted read-only inside the session (otherwise the agent could raise its own `pids.max`) | `sandbox.py` `lock_down_rest` |
 | Policy gate | Commit refuses changes to shell startup files, `.git/hooks`, `.git/config`, `~/.ssh`, autostart and systemd user units, `~/.local/bin`, credentials, `/etc` and setuid bits, and warns on mass deletion; `--accept-risk` overrides and is logged | `core/escrow/policy.py` |
 | Audit ledger | Append-only and hash-chained (each record holds the previous record's SHA-256), with `flock` for concurrent writers; `escrow verify` finds the first broken link. Tamper-evident, not tamper-proof | `core/escrow/ledger.py` |
-| Default for every agent | PATH shims + registry in `/etc/escrow/agents.d`; `ESCROW_SESSION` prevents nesting | `core/escrow/shim.py` |
+| Default for every agent | PATH shims + registry in `/etc/escrow/agents.d`; `ESCROW_SESSION` prevents nesting; `/etc/escrow/path.sh` keeps the shims first on PATH (login shells, terminal tabs, and before every bash prompt) | `core/escrow/shim.py`, `core/etc/escrow/path.sh` |
 | Distro integration | Debian packages, maintainer scripts, AppArmor profile allowing user namespaces for `escrow-enter` only (Ubuntu ≥ 23.10 restricts them) | `packaging/`, `core/etc/apparmor.d/escrow` |
 
 ## Tests
@@ -171,8 +178,9 @@ python3 -m unittest -v tests/test_escrow.py
 Clone the repo under your home folder: `/tmp` is private inside a session, so
 from a clone in `/tmp` the nesting test can't reach the repo and skips itself.
 
-36 end-to-end tests run real sessions against real files. They cover staging,
-commit, partial commit, replaced dirs, symlinks, mode changes, conflicts,
+40 end-to-end tests run real sessions against real files. They cover staging,
+commit, partial commit, undo after commit (incl. refusing when a file changed
+again, and undoing several partial commits), the PATH hook, replaced dirs, symlinks, mode changes, conflicts,
 discard, read-only system dirs and cgroup files, hidden session data, the PID
 namespace, cgroup limits, the fork bomb, the memory limit without swap, seccomp, sudo, the offline profile,
 nesting, the network log, decoys and the tripwire, the policy gate, mass-delete
@@ -235,9 +243,19 @@ latency and the local model, and writes `bench/results.json`.
 - Changing files that a running session also uses as its lower layer is
   "undefined" per the overlayfs docs. Escrow's commit-time conflict check
   catches the common case.
-- The shims work for login shells. An agent installed in `~/.local/bin` can
-  come before them on `PATH`, because Ubuntu's `~/.profile` prepends that
-  directory.
+- The shims are the *default*, not a security boundary: running the real
+  binary by its full path, or from a non-bash shell (zsh, fish) or a program
+  that sets its own `PATH`, bypasses them. In bash they stay first on `PATH`,
+  also after `~/.profile` prepends `~/.local/bin` (a login shell's first
+  prompt fixes it; `bash -lc` without a prompt does not).
+- To hook terminal tabs, `escrow-shims` appends one marked line to
+  `/etc/bash.bashrc` (a file owned by the bash package; Ubuntu has no
+  `bash.bashrc.d`). postrm removes it again.
+- `escrow undo` restores files only, and only from this session's journal:
+  sessions committed before 0.4.0 have none. The backups use disk space in
+  the state dir until the session dir is deleted.
+- The ISO (`escrow-os-0.3.2`) was built before 0.4.0, so it lacks `escrow
+  undo` and the PATH fix; rebuild it with `sudo bash iso/remaster.sh`.
 - WSL2 has no AppArmor, so the AppArmor profile was tested on the ISO
   instead (see above), not on an installed system.
 - Ubuntu's live session turns the user-namespace restriction off

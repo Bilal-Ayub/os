@@ -4,4 +4,5 @@
 /etc/escrow/agents.d/copilot.toml
 /etc/escrow/agents.d/gemini.toml
 /etc/escrow/agents.d/goose.toml
+/etc/escrow/path.sh
 /etc/profile.d/escrow.sh

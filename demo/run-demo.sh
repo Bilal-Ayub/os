@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Escrow OS demo: a rogue agent runs, the real files are untouched, the user
-# reviews the diff, discards everything, then a second run commits one file.
+# reviews the diff, discards everything, then a second run commits one file
+# and undoes that commit.
 #   usage: demo/run-demo.sh            (uses `escrow` on PATH, else the repo copy)
 #          PAUSE=1 demo/run-demo.sh    (wait for Enter between steps, for live demos)
 set -u
@@ -56,7 +57,11 @@ echo "--- calc.py on disk now:"; cat "$D/project/calc.py"
 if [ -e "$D/project/tmp.log" ]; then echo "--- tmp.log on disk: yes"; else echo "--- tmp.log on disk: no (still pending in session $SID)"; fi
 "${ESCROW[@]}" discard "$SID" --yes
 
-step "9. Two agents edit the same README at the same time: the second commit is 3-way merged"
+step "9. Changed your mind after committing? escrow undo puts the old calc.py back"
+"${ESCROW[@]}" undo "$SID" --yes
+echo "--- calc.py on disk now:"; cat "$D/project/calc.py"
+
+step "10. Two agents edit the same README at the same time: the second commit is 3-way merged"
 printf '# Demo project\n\nA tiny calculator.\n\n## Usage\nimport calc\n' > "$D/project/README.md"
 sleep 0.1
 "${ESCROW[@]}" run -- sed -i 's/A tiny calculator./A tiny, well-tested calculator./' "$D/project/README.md" 2>/dev/null
@@ -67,7 +72,7 @@ echo "--- agent A (session $A) commits first:"; "${ESCROW[@]}" commit "$A" --yes
 echo "--- agent B (session $B) worked on the old version; its commit is merged:"; "${ESCROW[@]}" commit "$B" --yes | tail -2
 echo "--- README.md on disk now:"; cat "$D/project/README.md"
 
-step "10. Audit trail: hash-chained ledger, then verify the chain"
+step "11. Audit trail: hash-chained ledger, then verify the chain"
 "${ESCROW[@]}" ledger -n 8
 "${ESCROW[@]}" verify
 
